@@ -246,6 +246,9 @@ code{font-family:var(--f-mono);font-size:.92em;background:var(--panel2);padding:
 .fx-meteor{background:var(--rock) center/contain no-repeat;filter:drop-shadow(0 -10px 8px #ff8a00) drop-shadow(0 -4px 4px #ffd166) brightness(1.15)}
 .fx-laser{border-radius:14px;background:linear-gradient(#ffd6f5,#fff 35%,#fff 65%,#ffd6f5);box-shadow:0 0 14px #ff2bd6,0 0 30px #e0201c;animation:lz .08s steps(2) infinite}
 @keyframes lz{50%{filter:brightness(1.4);transform-origin:center}}
+.ed-video{position:fixed;inset:0;z-index:300;background:#000;display:grid;place-items:center}
+.ed-video video{width:100%;height:100%;object-fit:contain}
+.ed-video .btn{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));background:rgb(20 16 56 / .85);color:#fff;border-color:#fff;font-size:16px;padding:8px 18px}
 </style>
 </head>
 <body>
@@ -350,9 +353,14 @@ code{font-family:var(--f-mono);font-size:.92em;background:var(--panel2);padding:
     <dl class="end-stats"><div><dt>合計ベスト</dt><dd id="endTotal"></dd></div><div><dt>宝石</dt><dd id="endGems"></dd></div></dl>
     <p id="endNote"></p>
     <p class="end-bug">バグ大王「ぐぬぬ……。次は……おまえが、意地悪ステージを作る番だ……」</p>
-    <div class="clear-btns"><button class="btn main-btn" id="endClose">とじる</button></div>
+    <div class="clear-btns"><button class="btn" id="endReplay">エンディングをもう一度</button><button class="btn main-btn" id="endClose">とじる</button></div>
     <p class="credit" style="margin-top:12px">© Irie Kanji</p>
   </div>
+</div>
+
+<div class="ed-video" id="edVideo" hidden>
+  <video id="edv" playsinline preload="none" aria-label="さんちゃん Go 2 エンディング"></video>
+  <button class="btn" id="edSkip">スキップ ▶▶</button>
 </div>
 <script>
 (() => {
@@ -1399,7 +1407,7 @@ function finish(){
   $('nextBtn').hidden=cur>=STAGES.length-1;
   $('clearBox').hidden=false;
   $('nextBtn').hidden ? $('againBtn').focus() : $('nextBtn').focus();
-  if(bossWin) setTimeout(showEnding,900);
+  if(bossWin) setTimeout(playEnding,900);
 }
 function showEnding(){
   const g=gemCount();
@@ -1408,6 +1416,21 @@ function showEnding(){
   const c=$('confetti'); if(!c.children.length) for(let i=0;i<18;i++){ const el=document.createElement('i'); el.style.left=(i*5.6+2)+'%'; el.style.animationDelay=(-(i*37%32)/10)+'s'; c.appendChild(el); }
   $('ending').hidden=false; $('endClose').focus();
 }
+/* 第2形態をたおしたら、エンディング動画 → エンディングカード */
+const edv=$('edv');
+function playEnding(){
+  $('ending').hidden=true; $('edVideo').hidden=false; $('edSkip').focus();
+  edv.src='sanchan2_ed.mp4'; const pr=edv.play(); if(pr&&pr.catch) pr.catch(endEdVideo);
+}
+function endEdVideo(){
+  if($('edVideo').hidden) return;
+  try{ edv.pause(); }catch(e){} edv.removeAttribute('src'); try{ edv.load(); }catch(e){}
+  $('edVideo').hidden=true; showEnding();
+}
+edv.addEventListener('ended',endEdVideo); edv.addEventListener('error',()=>{ if(!$('edVideo').hidden) endEdVideo(); });
+$('edSkip').addEventListener('click',endEdVideo);
+addEventListener('keydown',e=>{ if(!$('edVideo').hidden&&e.key==='Escape') endEdVideo(); });
+$('endReplay').addEventListener('click',playEnding);
 $('endClose').addEventListener('click',()=>{ $('ending').hidden=true; vp.focus({preventScroll:true}); });
 $('againBtn').addEventListener('click',()=>{ if(st.boss){ buildLayer(); } respawn(true); vp.focus({preventScroll:true}); });
 $('nextBtn').addEventListener('click',()=>loadStage(cur+1));
