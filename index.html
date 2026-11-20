@@ -235,6 +235,17 @@ code{font-family:var(--f-mono);font-size:.92em;background:var(--panel2);padding:
 .banner small{display:block;font:14px/1.4 var(--f-display);color:#fff;letter-spacing:.2em}
 @keyframes bn{from{transform:scaleY(0)}}
 .fx-boss.charge{filter:drop-shadow(0 0 10px #ff2bd6) drop-shadow(0 0 22px #e0201c) brightness(1.25);animation:hurt .08s steps(2) infinite}
+
+/* 第2形態のこうげきと予告 */
+.fx-tele{pointer-events:none}
+.fx-aim i{position:absolute;left:0;top:0;height:0;border-top:3px dashed #ff8a00;transform-origin:0 0;filter:drop-shadow(0 0 3px #ff4f2e);animation:blink .16s steps(2) infinite}
+.fx-col{background:repeating-linear-gradient(180deg,rgb(224 32 28 / .28) 0 14px,rgb(224 32 28 / .12) 14px 28px);border-left:2px dashed #e0201c;border-right:2px dashed #e0201c;animation:blink .2s steps(2) infinite}
+.fx-col b{position:absolute;left:50%;top:6px;transform:translateX(-50%);width:34px;height:34px;border-radius:50%;background:#e0201c;color:#fff;font:900 26px/34px var(--f-display);text-align:center}
+.fx-line{background:#ff2b2b;box-shadow:0 0 8px #ff2b2b;animation:blink .12s steps(2) infinite}
+@keyframes blink{50%{opacity:.25}}
+.fx-meteor{background:var(--rock) center/contain no-repeat;filter:drop-shadow(0 -10px 8px #ff8a00) drop-shadow(0 -4px 4px #ffd166) brightness(1.15)}
+.fx-laser{border-radius:14px;background:linear-gradient(#ffd6f5,#fff 35%,#fff 65%,#ffd6f5);box-shadow:0 0 14px #ff2bd6,0 0 30px #e0201c;animation:lz .08s steps(2) infinite}
+@keyframes lz{50%{filter:brightness(1.4);transform-origin:center}}
 </style>
 </head>
 <body>
@@ -612,7 +623,8 @@ ${bug('ここから先は、わしの罠だらけだ。せいぜい、ひっか�
 // ・ふつうの姿の頭の高さは 106px。ジャンプ力10ではとどかない……
 // ・第2形態は空を飛ぶ。体の下のはしは下から 140px、頭のてっぺんは 263px
 // ・バグ大王はブロックを通りぬけられない。めりこんだブロックはこわしてしまう
-// ・第2形態は、下に岩を落とす。岩は足場をこわす
+// ・第2形態は、体力がへるほど攻撃が変わる：火の玉 → 隕石 → レーザー
+// ・どの攻撃も、来る場所が先に赤く光る。隕石は足場をこわす。レーザーはブロックでふせげる
 // ※ この部屋では、重力は10、ジャンプ力は12まで
 `,
   mission:`<h2>ステージ6　バグ大王</h2>
@@ -631,6 +643,7 @@ ${bug('よくぞここまで来た。だが橋は4つのスイッチを同時に
 <details><summary>ヒント1</summary>第2形態の頭のてっぺんは、下から263px。ブロックの <code>bottom</code> を264px以上（たとえば <code>270px</code>）にして、バグ大王より上に足場を作ろう。足場のすき間から、頭の上に落ちてふみます。バグ大王はブロックを通りぬけられないので、壁を作って動きを止めることもできます。</details>
 <details><summary>ヒント2</summary>HTMLに、足場をつくるプログラムを書けます。前編の激ムズコースと同じ <code>addBlock(左からの距離, 下からの高さ)</code> を使おう。
 ${snip('\x3cscript>\nfor (let i = 0; i < 3; i++) {\n  addBlock(1800 + i * 70, 110 + i * 70);\n}\nfor (let i = 0; i < 5; i++) {\n  addBlock(2000 + i * 100, 270);\n}\n\x3c/script>')}</details></li></ol>
+<p class="memo">第2形態は、体力がへるほど攻撃が強くなります（火の玉 → 隕石 → レーザー）。どの攻撃も、来る場所が先に赤く光ります。よく見てよけよう。レーザーはブロックの後ろにかくれるとふせげます。</p>
 <p class="memo">第2形態でやられたら、第2形態の最初からやり直せます。コードを直して反映しても、チェックポイントは残ります。</p>
 <p class="gemline">◆ 宝石：部屋のいちばん右の高い所。足場を作って取りに行こう。</p>` }
 ];
@@ -1210,20 +1223,62 @@ function stepFx(solids){
     const f=fx[i];
     f.x+=f.vx; f.y+=f.vy;
     if(f.kind==='fireD') f.vy=Math.min(f.vy+0.04,7);
-    let gone=f.x<cam-120||f.x>cam+VW+200||f.y>H+40;
+    let gone=f.x<cam-260||f.x>cam+VW+260||f.y>H+40||f.y<-200;
+    if(f.life!=null&&--f.life<=0){ gone=true; if(f.onEnd) f.onEnd(); }
+    if(f.kind==='tele'){ if(gone){ f.el.remove(); fx.splice(i,1); } continue; }
+    if(f.kind==='laser'){
+      if(!gone&&hit(p,{x:f.x,y:f.y+4,w:f.w,h:f.h-8})){ kill('バグ大王のレーザーに当たった！'); return true; }
+      if(gone){ f.el.remove(); fx.splice(i,1); } continue;
+    }
+    if(f.kind==='meteor'&&!gone){
+      const box={x:f.x+6,y:f.y+6,w:f.w-12,h:f.h-10};
+      for(const q of solids){ if(hit(box,q)){ if(q.el){ if(!q.el.classList.contains('broken')){ breakBlock(q); pop(q.x+q.w/2,q.y+q.h/2); } } else { pop(f.x+f.w/2,f.y+f.h); gone=true; break; } } }
+      if(!gone&&hit(p,box)){ kill('隕石が落ちてきた！'); return true; }
+      if(gone){ f.el.remove(); fx.splice(i,1); } continue;
+    }
     if(!gone&&!f.dead){
       const box={x:f.x+3,y:f.y+3,w:f.w-6,h:f.h-6};
       const q=solids.find(s=>hit(box,s));
       if(q&&!(f.kind==='bug'&&q.gate)){ if(f.kind==='fireD') breakBlock(q); pop(f.x+f.w/2,f.y+f.h/2); gone=true; }
       else if(hit(p,box)){
         if(f.kind==='bug'&&p.vy>0&&p.y+p.h-f.y<14){ f.dead=40; f.el.classList.add('dead'); p.vy=-8; toast('敵をふんでたおした！'); }
-        else { kill(f.kind==='bug'?'飛んできた敵にぶつかった！':'火の玉に当たった！'); return true; }
+        else { kill(f.kind==='bug'?'飛んできた敵にぶつかった！':f.kind==='fireD'?'落ちてきた岩に当たった！':'火の玉に当たった！'); return true; }
       }
     }
     if(f.dead&&--f.dead<=0) gone=true;
     if(gone){ f.el.remove(); fx.splice(i,1); }
   }
   return false;
+}
+/* 第2形態のこうげき。どれも、来る場所を先に赤く知らせてから撃つ */
+function tele(cls,x,y,w,h,life,onEnd,inner){ const o=addFx('fx-tele '+cls,x,y,w,h,{kind:'tele',life,onEnd}); if(inner) o.el.innerHTML=inner; return o; }
+function bossAttack(b,kind){
+  const d=BF[2], cx=b.x+d.hb[0]+d.hb[2]/2, by=b.y+d.hb[1]+d.hb[3];
+  if(kind==='rock'){ addFx('fx-rock',cx-14,by-12,28,25,{kind:'fireD',vy:2.5}); return; }
+  if(kind==='fire'){   // ねらいうちの火の玉：通り道を点線で予告
+    const sx=cx-10, sy=b.y+d.hb[1]+40, tx=p.x+p.w/2-10, ty=p.y+p.h/2-10, dx=tx-sx, dy=ty-sy, len=Math.hypot(dx,dy)||1, ang=Math.atan2(dy,dx)*180/Math.PI;
+    tele('fx-aim',sx+10,sy+10,4,4,50,()=>{ for(const a of [-0.12,0,0.12]){ const c=Math.cos(Math.atan2(dy,dx)+a), s2=Math.sin(Math.atan2(dy,dx)+a); addFx('fx-fire',sx,sy,20,20,{kind:'fire',vx:c*5,vy:s2*5}); } },
+      `<i style="width:${Math.min(len+200,900)}px;rotate:${ang}deg"></i>`);
+    say('燃えつきろ！',1100); return;
+  }
+  if(kind==='meteor'){ // 隕石：落ちてくる列を赤く予告
+    const x=clamp(p.x+p.w/2-26,1700,2530);
+    tele('fx-col',x-6,0,64,GROUND,72,()=>addFx('fx-meteor',x,-70,52,52,{kind:'meteor',vy:9}),'<b>!</b>');
+    say('隕石よ、ふりそそげ！',1300); return;
+  }
+  if(kind==='laser'){  // レーザー：ためてから横一直線。ブロックの後ろは安全
+    const dir=p.x+p.w/2<cx?-1:1, y=clamp(p.y+p.h/2-14,20,GROUND-28), x0=dir<0?b.x+d.hb[0]:b.x+d.hb[0]+d.hb[2];
+    b.hold=125; b.el.classList.add('charge');
+    tele('fx-line',dir<0?1700:x0,y+12,dir<0?x0-1700:2560-x0,4,85,()=>{
+      b.el.classList.remove('charge');
+      wr=world.getBoundingClientRect(); sc=wr.height/H||1;
+      const band={y,h:28}; let end=dir<0?1700:2560;
+      for(const q of solidList()){ if(!q.el||q.el.classList.contains('broken')) continue; if(q.y<band.y+band.h&&q.y+q.h>band.y){ if(dir<0&&q.x+q.w<=x0+1) end=Math.max(end,q.x+q.w); if(dir>0&&q.x>=x0-1) end=Math.min(end,q.x); } }
+      const lx=dir<0?end:x0, w=Math.abs(end-x0);
+      addFx('fx-laser',lx,y,w,28,{kind:'laser',life:40});
+    });
+    say('消えろォォ！！',1600);
+  }
 }
 function fireLevel(sec){ return sec<30?{n:110,v:4,s:10}:sec<60?{n:70,v:5,s:30}:sec<90?{n:38,v:6,s:55}:{n:9,v:7,s:90}; }
 function stepBoss(solids){
@@ -1259,11 +1314,14 @@ function stepBoss(solids){
   } else if(b.phase===2){
     if(b.rise>0){ b.rise--; b.y+= (FLYY()-b.y)*0.06; if(b.rise===0) b.vx=-2.2; }
     else {
-      b.dir=b.vx<0?-1:1; const ox=b.x; b.x+=b.vx;
+      b.dir=b.vx<0?-1:1; const ox=b.x; if(!(b.hold>0)) b.x+=b.vx;
       if(bossHits(solids)){ b.x=ox; b.vx=-b.vx; }
       if(b.x<BF[2].min){ b.x=BF[2].min; b.vx=2.2; } if(b.x>BF[2].max){ b.x=BF[2].max; b.vx=-2.2; }
       const oy=b.y; b.y=FLYY()+Math.abs(Math.sin(b.t/30))*12; if(bossHits(solids)) b.y=oy;
-      if(--b.cool<=0){ b.cool=b.hp<=1?50:72; { const d=BF[2]; addFx('fx-rock',b.x+d.hb[0]+d.hb[2]/2-14,b.y+d.hb[1]+d.hb[3]-12,28,25,{kind:'fireD',vy:2.5}); } }
+      if(b.hold>0) b.hold--;
+      if(--b.cool<=0){ const r=b.hp/b.max, n=(b.ac=(b.ac||0)+1);
+        const kind=r>2/3?(n%2?'fire':'rock'):r>1/3?(n%2?'meteor':'fire'):(n%2?'laser':'meteor');
+        bossAttack(b,kind); b.cool=kind==='laser'?210:kind==='rock'?110:165; }
     }
   } else if(b.phase===1.5){
     stepCut(b);
